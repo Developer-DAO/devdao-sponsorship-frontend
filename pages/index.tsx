@@ -1,88 +1,67 @@
 import type { NextPage } from 'next';
-import type { FC } from 'react';
-import { useAccount, useConnect, useDisconnect, useEnsName } from 'wagmi';
+import { FC, useEffect, useState } from 'react';
+import {
+  useAccount,
+  useConnect,
+  useContract,
+  useDisconnect,
+  useEnsName,
+  useSigner,
+} from 'wagmi';
+import json from '@/public/data.json';
+import { ConnectButton } from '@rainbow-me/rainbowkit';
+import { mint } from '@/utils/deployAndMint';
+
+const abi = json.abi;
 
 const Home: NextPage = () => {
   const { data: account } = useAccount();
-  const { data: ensName } = useEnsName({ address: account?.address });
-  const { connect, connectors, error, isConnecting, pendingConnector } =
-    useConnect();
-  const { disconnect } = useDisconnect();
+  const { data: signer } = useSigner();
+  const contract = useContract({
+    addressOrName: '0xDd19C4b1f203bd7d8cc710e0b6B6FCF0459106BB',
+    contractInterface: abi,
+    signerOrProvider: signer,
+  });
+  const [receiverAddress, setReceiverAddress] = useState('');
+  const [tokenURI, setTokenURI] = useState('');
 
-  if (account) {
-    return (
-      <div className='py-24 text-center'>
-        <div>
-          {ensName ? `${ensName} (${account.address})` : account.address}
-        </div>
-        <div>Connected to {account?.connector?.name}</div>
-        <button
-          className='rounded bg-slate-200 p-2'
-          onClick={() => disconnect()}
-        >
-          Disconnect
-        </button>
-      </div>
-    );
-  }
-
-  return (
-    <div className='py-24 text-center'>
-      <h1 className='text-2xl font-bold'>Welcome to create-web3-frontend</h1>
-      <p className='mt-10'>Connect your wallet:</p>
-      <div className='mt-5 flex justify-center gap-6'>
-        {connectors.map((connector) => {
-          return (
-            <button
-              className='rounded bg-slate-200 p-2'
-              key={connector.id}
-              onClick={() => connect(connector)}
-            >
-              {connector.name}
-              {!connector.ready && ' (unsupported)'}
-              {isConnecting &&
-                connector.id === pendingConnector?.id &&
-                ' (connecting)'}
-            </button>
+  useEffect(() => {
+    (async () => {
+      try {
+        if (contract) {
+          const ownedToken = await contract.ownedToken(
+            '0x0ED6Cec17F860fb54E21D154b49DAEFd9Ca04106'
           );
-        })}
-      </div>
+          const expiryTime = await contract.scholarshipExpires(ownedToken);
+          const contractTokenURI = await contract.tokenURI(ownedToken);
+          const res = await (await fetch(contractTokenURI)).json();
+          setTokenURI(res.image);
+          console.log({ ownedToken, expiryTime, res });
+        }
+      } catch (error) {}
+    })();
+  }, [contract]);
 
-      {error && <div>{error.message}</div>}
-
-      <InfoSection />
-    </div>
-  );
-};
-
-const InfoSection: FC = () => {
   return (
-    <div className='mt-10'>
-      <hr className='my-4' />
-      <h2 className='text-xl font-bold'>If you need help</h2>
-      <div className='flex flex-col gap-2 mt-2'>
-        <a
-          href='https://wagmi.sh'
-          target='_blank'
-          className='underline text-gray-600'
-        >
-          Link to wagmi docs
-        </a>
-        <a
-          href='https://github.com/dhaiwat10/create-web3-frontend'
-          target='_blank'
-          className='underline text-gray-600'
-        >
-          Open an issue on Github
-        </a>
-        <a
-          href='https://twitter.com/dhaiwat10'
-          target='_blank'
-          className='underline text-gray-600'
-        >
-          DM me on Twitter
-        </a>
-      </div>
+    <div className='p-20'>
+      <ConnectButton />
+
+      <input
+        className='mt-10 border-2 block p-2 rounded'
+        value={receiverAddress}
+        onChange={(e) => setReceiverAddress(e.target.value)}
+      />
+
+      <button
+        onClick={async () => {
+          await mint(contract, account?.address as string, receiverAddress);
+        }}
+        className='bg-slate-200 rounded px-4 py-2 mt-4'
+      >
+        Mint a sponsorship!
+      </button>
+
+      <img className='w-[400px]' src={tokenURI} />
     </div>
   );
 };
