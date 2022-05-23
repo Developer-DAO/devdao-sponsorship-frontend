@@ -1,16 +1,10 @@
 import type { NextPage } from 'next';
-import { FC, useEffect, useState } from 'react';
-import {
-  useAccount,
-  useConnect,
-  useContract,
-  useDisconnect,
-  useEnsName,
-  useSigner,
-} from 'wagmi';
+import { useEffect, useState } from 'react';
+import { useAccount, useContract, useSigner } from 'wagmi';
 import json from '@/public/data.json';
 import { ConnectButton } from '@rainbow-me/rainbowkit';
 import { mint } from '@/utils/deployAndMint';
+import { toast, Toaster } from 'react-hot-toast';
 
 const abi = json.abi;
 
@@ -25,43 +19,66 @@ const Home: NextPage = () => {
   const [receiverAddress, setReceiverAddress] = useState('');
   const [tokenURI, setTokenURI] = useState('');
 
-  useEffect(() => {
-    (async () => {
-      try {
-        if (contract) {
-          const ownedToken = await contract.ownedToken(
-            '0x0ED6Cec17F860fb54E21D154b49DAEFd9Ca04106'
-          );
-          const expiryTime = await contract.scholarshipExpires(ownedToken);
-          const contractTokenURI = await contract.tokenURI(ownedToken);
-          const res = await (await fetch(contractTokenURI)).json();
-          setTokenURI(res.image);
-          console.log({ ownedToken, expiryTime, res });
-        }
-      } catch (error) {}
-    })();
-  }, [contract]);
+  const [mintLoading, setMintLoading] = useState(false);
+
+  const onMintClick = async () => {
+    try {
+      setMintLoading(true);
+      const success = await mint(
+        contract,
+        account?.address as string,
+        receiverAddress
+      );
+      if (success) {
+        toast.success('Minted successfully');
+        const ownedToken = await contract.ownedToken(receiverAddress);
+        const contractTokenURI = await contract.tokenURI(ownedToken);
+        const res = await (await fetch(contractTokenURI)).json();
+        setTokenURI(res.image);
+      } else {
+        toast.error('Mint failed');
+      }
+    } catch (error) {
+      toast.error(error.message);
+      console.error(error);
+    } finally {
+      setMintLoading(false);
+    }
+  };
 
   return (
-    <div className='p-20'>
-      <ConnectButton />
+    <div className='py-20 text-center'>
+      <Toaster />
+      <div className='w-full flex justify-center mb-10'>
+        <ConnectButton showBalance={false} />
+      </div>
+
+      <h1 className='text-4xl font-bold'>Developer DAO sponsorship</h1>
+
+      <p className='mt-2 text-slate-500 mx-auto max-w-2xl'>
+        This project lets Developer DAO genesis NFT holders mint a sponsorship
+        token for someone else to give them access to the DAO&apos;s membership
+        for 60 days.
+      </p>
 
       <input
-        className='mt-10 border-2 block p-2 rounded'
+        className='mt-10 border-2 block px-4 py-2 rounded mx-auto w-[400px]'
         value={receiverAddress}
         onChange={(e) => setReceiverAddress(e.target.value)}
+        placeholder="enter the receiver's polygon address"
       />
 
       <button
-        onClick={async () => {
-          await mint(contract, account?.address as string, receiverAddress);
-        }}
-        className='bg-slate-200 rounded px-4 py-2 mt-4'
+        onClick={onMintClick}
+        className='bg-slate-200 rounded px-4 py-2 mt-4 disabled:cursor-not-allowed disabled:opacity-50'
+        disabled={!!mintLoading}
       >
         Mint a sponsorship!
       </button>
 
-      <img className='w-[400px]' src={tokenURI} />
+      {tokenURI && (
+        <img className='w-[400px] border-2 rounded' src={tokenURI} />
+      )}
     </div>
   );
 };
