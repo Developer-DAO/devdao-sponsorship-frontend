@@ -39,6 +39,7 @@ const Home: NextPage = () => {
         toast.error('Mint failed');
       }
     } catch (error) {
+      // @ts-ignore
       toast.error(error.message);
       console.error(error);
     } finally {

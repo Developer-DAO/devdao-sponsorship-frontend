@@ -27,6 +27,7 @@ export const mint = async (
     console.log(res);
     return true;
   } catch (error) {
+    // @ts-ignore
     console.log(error.message);
     return false;
   }
